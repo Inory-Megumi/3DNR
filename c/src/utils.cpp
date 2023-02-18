@@ -147,6 +147,7 @@ void NrClass::init_buffer()
     fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);
 }
 
+
 void NrClass::process(int n){
     int i = 0;
     while (!feof(this->fin) ||(i < n))
@@ -176,5 +177,28 @@ void NrClass::process_once(){
     this->ref_pointer = this->tmp_pointer;
     this->tmp_pointer = tmp;
     // Write Reference Frame
-    fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);
+    fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);    
+}
+
+
+// UTILS FUNCTION
+// add_noise
+void NrClass::add_noise(float sigma,int n){
+    int cnt = 0;
+    while (!feof(this->fin) && (cnt < n))
+    {   
+        fread(this->cur_pointer, sizeof(PIXEL_FMT), this->size, this->fin);
+        // add_noise
+        init_rand();
+        for(int i = 0; i < this->size; i++){
+            float noise = getNoise(sigma);
+            float pixel = (float)cur_pointer[i];
+            pixel = pixel + noise;
+            pixel = pixel < 0 ? 0 : (pixel > 255 ? 255 : pixel);
+            cur_pointer[i] = (PIXEL_FMT)pixel;
+        }
+        printf("Process NO.%d Frame\n",cnt);
+        fwrite(this->cur_pointer, sizeof(PIXEL_FMT), this->size, this->fout);
+        cnt ++;
+    } 
 }

@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include "libauxiliar.h"
 
 #define PIXEL_FMT unsigned char
 enum VIDEO_FMT {v420,v422,v444} ;
@@ -33,6 +34,7 @@ class NrClass {
         void init_buffer();
         void process(int n);
         void process_once();
+        void add_noise(float sigma, int n);
         //get value
         PIXEL_FMT get_cur_y_val(int i ,int j);
         PIXEL_FMT get_cur_u_val(int i ,int j);

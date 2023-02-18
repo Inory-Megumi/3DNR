@@ -1,6 +1,6 @@
 CXX = g++
 CXX_FLAGS = -Wall -g
-CXX_SRC = $(wildcard src/*.cpp)
+CXX_SRC = $(wildcard src/*.cpp src/*.c)
 HEADER_SRC = $(wildcard src/*.h)
 BIN = NR
 YUV_SRC = ../data/akiyo_qcif.yuv
