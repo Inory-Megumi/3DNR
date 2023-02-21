@@ -23,14 +23,18 @@ int main(int argc, char **argv)
     }
     // Create Write Files
     FILE *file_out = fopen(argv[2],"wb");
+    FILE *log_out = fopen(argv[3],"w+");
     // Create NR Process
     NrClass MainProcess(176,144,v420);
-    MainProcess.specify_yuv_file(file_in,file_out);
-    MainProcess.add_noise(10,1);
-    // MainProcess.process(-1);
+    MainProcess.specify_file(file_in,file_out,log_out);
+    // MainProcess.add_noise(10,30);
+    MainProcess.process(2);
     // int i = 26;int j = 32;
     // printf("y_value = %d\n",MainProcess.get_cur_y_val(i,j));
     // printf("u_value = %d\n",MainProcess.get_cur_u_val(i,j));
     // printf("v_value = %d\n",MainProcess.get_cur_v_val(i,j));
+    fclose(file_in);
+    fclose(file_out);
+    fclose(log_out);
     return 0;
 }

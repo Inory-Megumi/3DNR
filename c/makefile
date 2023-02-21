@@ -5,10 +5,11 @@ HEADER_SRC = $(wildcard src/*.h)
 BIN = NR
 YUV_SRC = ../data/akiyo_qcif.yuv
 YUV_DST = ../data/akiyo_qcif_out.yuv
+LOG_FILE = log.txt
 $(BIN): $(CXX_SRC) $(HEADER_SRC)
 	@$(CXX) $(CXX_FLAGS) $(CXX_SRC) -o $(BIN)
 run : $(BIN)
-	@./$(BIN) $(YUV_SRC) $(YUV_DST)
+	@./$(BIN) $(YUV_SRC) $(YUV_DST) $(LOG_FILE)
 clean :
 	rm -rf $(BIN)
 .PHONY:
