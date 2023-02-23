@@ -5,6 +5,7 @@
  * @Description:   
  */
 #include "utils.h"
+
 // Function
 // Init Class and allocate space
 NrClass::NrClass(int w, int h, int fmt)
@@ -33,6 +34,7 @@ NrClass::NrClass(int w, int h, int fmt)
     this->ref_pointer = (PIXEL_FMT *)malloc(this->size * sizeof(PIXEL_FMT));
     this->cur_pointer = (PIXEL_FMT *)malloc(this->size * sizeof(PIXEL_FMT));
     this->tmp_pointer = (PIXEL_FMT *)malloc(this->size * sizeof(PIXEL_FMT));
+    this->motion_mask_pointer = (bool *)malloc(this->resolution * sizeof(bool));
 }
 
 // Function
@@ -140,11 +142,61 @@ PIXEL_FMT NrClass::get_ref_v_val(int i, int j)
     return get_pixel(offset, REF);
 }
 
+
+void NrClass::set_y_val(int i, int j, PIXEL_FMT val)
+{
+    int offset = i * this->width + j;
+    *(this->tmp_pointer + offset) = val;
+}
+void NrClass::set_u_val(int i, int j, PIXEL_FMT val)
+{
+    int offset = 0;
+    switch (this->format)
+    {
+    case v420:
+        offset = i / 2 * this->width / 2 + j / 2 + this->resolution;
+        *(this->tmp_pointer + offset) = val;
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+}
+void NrClass::set_v_val(int i, int j, PIXEL_FMT val)
+{
+    int offset = 0;
+    switch (this->format)
+    {
+    case v420:
+        offset = i / 2 * this->width / 2 + j / 2 + this->resolution * 5 / 4;
+        *(this->tmp_pointer + offset) = val;
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+}
+
+bool NrClass::get_motion(int i, int j)
+{
+    int offset = i * this->width + j;
+    return *(this->motion_mask_pointer + offset);
+}
+
+void NrClass::set_motion(int i, int j, bool val)
+{
+    int offset = i * this->width + j;
+    *(this->motion_mask_pointer + offset) = val;
+}
+
 // Function
 // Process Image
 void NrClass::init_buffer()
 {
     memset(this->cur_pointer,0,this->size);
+    memset(this->motion_mask_pointer,0,this->resolution);
     fread(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fin);
     fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);
 }
@@ -177,7 +229,7 @@ void NrClass::process_once(){
     this->ref_pointer = this->tmp_pointer;
     this->tmp_pointer = tmp;
     // Write Reference Frame
-    //fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);    
+    fwrite(this->ref_pointer, sizeof(PIXEL_FMT), this->size, this->fout);    
 }
 
 
@@ -186,9 +238,164 @@ void NrClass::recursive_denoising(){
     // 1. Coarse Motion Estimation
     // 2. Store Coarse MV
     // 3. Line Temperal Denoising
-    coarse_motion_estimation();
+    motion_detection();
+    pixelwise_denoising();
+}
+
+void NrClass::pixelwise_denoising()
+{
+    for(int i = 0; i < this->height; i++){
+        for(int j = 0; j < this->width; j++){
+            if(get_motion(i,j))
+                set_y_val(i,j,bilateral_filter(i,j));
+            else
+                set_y_val(i,j,temporal_filter(i,j));
+            if((i%2)&&(j%2)){
+                set_u_val(i,j,get_cur_u_val(i,j));
+                set_v_val(i,j,get_cur_v_val(i,j));
+            }
+        }
+    }
+}
+
+
+
+//////////////////////////////////
+//
+//  topic : bilateral filter && Temporal filter
+//
+/////////////////////////////////
+PIXEL_FMT NrClass::temporal_filter(int x, int y){
+    float k = this->nr_temporal;
+    if((x == 67) && (y == 153))
+        {   
+            printf("hi!\n");
+            printf("REF_Y = %d,CUR_Y= %d\n",get_ref_y_val(x,y),get_cur_y_val(x,y));}
+                
+    float pixel_n = k * get_cur_y_val(x,y) + (1.0 - k) * get_ref_y_val(x,y);
+    // fprintf(this->flog,"pixel= %f \n",pixel_n);
+    return (PIXEL_FMT) pixel_n;
+}
+
+
+#define BF_SZ 5
+PIXEL_FMT NrClass::bilateral_filter(int x, int y)
+{
+    double sigmaS = this->nr_spatialS;
+    double sigmaI = this->nr_spatialI;
+    
+    double iFiltered = 0;
+    double wP = 0;
+    int neighbor_x = 0;
+    int neighbor_y = 0;
+    int half = BF_SZ / 2;
+    // DEBUG
+
+    if(check_border(x,y,half))
+        return get_cur_y_val(x,y); 
+    // border_check
+    for(int i = 0; i < BF_SZ; i++) {
+        for(int j = 0; j < BF_SZ; j++) {
+            neighbor_x = x - (half - i);
+            neighbor_y = y - (half - j);
+            double gi = gaussian(get_cur_y_val(neighbor_x, neighbor_y) - get_cur_y_val(x, y), sigmaI);
+            double gs = gaussian(distance(x, y, neighbor_x, neighbor_y), sigmaS);
+            double w = gi * gs;
+            iFiltered = iFiltered + get_cur_y_val(neighbor_x,neighbor_y) * w;
+            wP = wP + w;
+        }
+    }
+    iFiltered = iFiltered / wP;
+    return  (PIXEL_FMT)iFiltered;
+}
+
+PIXEL_FMT NrClass::gaussian_filter(int x, int y)
+{
+    double sigmaS = this->nr_spatialS;
+    double sigmaI = this->nr_spatialI;
+    
+    double iFiltered = 0;
+    double wP = 0;
+    int neighbor_x = 0;
+    int neighbor_y = 0;
+    int half = BF_SZ / 2;
+    if(check_border(x,y,half))
+        return get_cur_y_val(x,y); 
+    // border_check
+    for(int i = 0; i < BF_SZ; i++) {
+        for(int j = 0; j < BF_SZ; j++) {
+            neighbor_x = x - (half - i);
+            neighbor_y = y - (half - j);
+            double gs = gaussian(distance(x, y, neighbor_x, neighbor_y), sigmaS);
+            double w = gs;
+            iFiltered = iFiltered + get_cur_y_val(neighbor_x,neighbor_y) * w;
+            wP = wP + w;
+        }
+    }
+    iFiltered = iFiltered / wP;
+    return  (PIXEL_FMT)iFiltered;
+}
+
+
+
+
+//////////////////////////////////
+//
+//  topic : optical flow
+//
+/////////////////////////////////
+void NrClass::lucas_kanada_flow()
+{
+
+
 
 }
+//////////////////////////////////
+//
+//  topic : motion estimation
+//
+/////////////////////////////////
+void NrClass::motion_detection(){
+    res_detection();
+}
+#define RES_SZ 5
+void NrClass::res_detection(){
+    double thre = this->res_thre;
+    for(int i = 0; i < this->height; i++)
+        for(int j = 0; j < this->width; j++){
+            if(abs(res_calculator(i,j)) > thre)
+                set_motion(i,j,1);
+            else
+                set_motion(i,j,0);
+        }
+}
+
+double NrClass::res_calculator(int x, int y){
+    int half = RES_SZ / 2;
+    if (check_border(x,y,half))    return 0;
+    double res = 0;
+    double rn = 0;
+    double a_res = 0;
+    int neighbor_x = 0;
+    int neighbor_y = 0;
+    for(int i = 0; i < BF_SZ; i++) {
+        for(int j = 0; j < BF_SZ; j++) {
+            neighbor_x = x - (half - i);
+            neighbor_y = y - (half - j);
+            res += (get_cur_y_val(neighbor_x, neighbor_y) - get_ref_y_val(neighbor_x, neighbor_y));
+            rn++;
+        }
+    }
+    a_res = res / rn;
+    fprintf(this->flog,"%f\n",a_res);
+    return a_res;
+}
+
+//////////////////////////////////
+//
+//  topic : motion estimation
+//
+/////////////////////////////////
 
 // Function
 // Full Search 
@@ -338,4 +545,18 @@ void NrClass::add_noise(float sigma,int n){
         fwrite(this->cur_pointer, sizeof(PIXEL_FMT), this->size, this->fout);
         cnt ++;
     } 
+}
+
+float NrClass::distance(int x, int y, int i, int j) {
+    return float(sqrt(pow(x - i, 2) + pow(y - j, 2)));
+}
+
+double NrClass::gaussian(float x, double sigma) {
+    return exp(-(pow(x, 2))/(2 * pow(sigma, 2))) / (2 * M_PI * pow(sigma, 2));
+
+}
+
+bool NrClass::check_border(int x, int y, int half)
+{
+    return (x - half < 0) || (x + half > this->height) || (y + half > this->width) || (y - half < 0);
 }

@@ -3,7 +3,7 @@ CXX_FLAGS = -Wall -g
 CXX_SRC = $(wildcard src/*.cpp src/*.c)
 HEADER_SRC = $(wildcard src/*.h)
 BIN = NR
-YUV_SRC = ../data/akiyo_qcif.yuv
+YUV_SRC = ../data/akiyo_qcif_noise_out.yuv
 YUV_DST = ../data/akiyo_qcif_out.yuv
 LOG_FILE = log.txt
 $(BIN): $(CXX_SRC) $(HEADER_SRC)

@@ -27,8 +27,8 @@ int main(int argc, char **argv)
     // Create NR Process
     NrClass MainProcess(176,144,v420);
     MainProcess.specify_file(file_in,file_out,log_out);
-    // MainProcess.add_noise(10,30);
-    MainProcess.process(2);
+    // MainProcess.add_noise(5,50);
+    MainProcess.process(20);
     // int i = 26;int j = 32;
     // printf("y_value = %d\n",MainProcess.get_cur_y_val(i,j));
     // printf("u_value = %d\n",MainProcess.get_cur_u_val(i,j));
